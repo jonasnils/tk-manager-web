@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>TK Manager</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TK Manager">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --accent:#62afff; --accent:color(display-p3 .435 .69 1);
+  --accent-tint:rgba(98,175,255,.15);
+  --bg:#f2f2f7; --cell:#fff; --label:#000; --secondary:rgba(60,60,67,.6); --sep:rgba(60,60,67,.29);
+  --fill:rgba(118,118,128,.12); --seg-on:#fff; --red:#ff3b30; --orange:#ff9500; --green:#34c759;
+  --bar:rgba(242,242,247,.85);
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#000; --cell:#1c1c1e; --label:#fff; --secondary:rgba(235,235,245,.6); --sep:rgba(84,84,88,.65);
+    --fill:rgba(118,118,128,.24); --seg-on:#636366; --red:#ff453a; --orange:#ff9f0a; --green:#30d158;
+    --bar:rgba(0,0,0,.8); --accent-tint:rgba(98,175,255,.2); }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--label);
+  font:17px/1.29 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;-webkit-text-size-adjust:100%}
+body{overscroll-behavior-y:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input{font:inherit;color:var(--label)}
+.screen{min-height:100vh;padding-bottom:calc(env(safe-area-inset-bottom) + 40px);
+  padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);animation:in .28s ease}
+.screen.back{animation:back .25s ease}
+@keyframes in{from{transform:translateX(30%);opacity:.3}to{transform:none;opacity:1}}
+@keyframes back{from{transform:translateX(-15%);opacity:.5}to{transform:none;opacity:1}}
+.navbar{position:sticky;top:0;z-index:5;height:calc(44px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 8px 0;
+  display:flex;align-items:center;justify-content:space-between;background:var(--bar);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
+.navbar .small{position:absolute;left:50%;transform:translateX(-50%);font-weight:600;opacity:0;transition:opacity .15s;
+  white-space:nowrap;max-width:55%;overflow:hidden;text-overflow:ellipsis;bottom:11px}
+.navbar.scrolled .small{opacity:1}
+.navbtn{color:var(--accent);display:flex;align-items:center;gap:2px;padding:6px 8px;min-height:44px;font-size:17px}
+.navbtn svg{width:24px;height:24px}
+.chev{width:13px;height:21px;margin-right:4px}
+.largetitle{font-size:34px;font-weight:700;letter-spacing:.37px;margin:2px 20px 8px;line-height:41px}
+.center{display:flex;flex-direction:column;align-items:center;gap:20px;padding:16px;text-align:center}
+.center .lt{font-size:34px;font-weight:700;line-height:41px}
+.secondary{color:var(--secondary)}
+.btn{border-radius:8px;padding:7px 14px;font-size:17px;font-weight:400;color:var(--accent);background:var(--accent-tint)}
+.btn.prominent{background:var(--accent);color:#fff;font-weight:600}
+.btn:active{opacity:.6}
+.search{margin:0 16px 10px;display:flex;align-items:center;gap:6px;background:var(--fill);border-radius:10px;padding:0 8px;height:36px}
+.search svg{width:16px;height:16px;flex:none;color:var(--secondary)}
+.search input{border:0;background:transparent;outline:0;flex:1;font-size:17px;min-width:0}
+.search input::placeholder{color:var(--secondary)}
+.search .clear{display:none;width:18px;height:18px;border-radius:50%;background:var(--secondary);color:var(--cell);font-size:12px;line-height:18px}
+.search.has .clear{display:block}
+.section{margin:0 16px 35px}
+.section-h{font-size:13px;text-transform:uppercase;color:var(--secondary);margin:0 16px 7px;letter-spacing:-.08px}
+.group{background:var(--cell);border-radius:10px;overflow:hidden}
+.cell{position:relative;min-height:44px;padding:11px 16px;display:flex;align-items:center;gap:8px;background:var(--cell)}
+.cell + .cell::before,.rowwrap + .rowwrap::before{content:"";position:absolute;top:0;left:16px;right:0;border-top:.5px solid var(--sep);z-index:2}
+.cell.link{cursor:pointer}
+.cell.link:active,.rowwrap .cell.press{background:var(--fill)}
+.cell .grow{flex:1;min-width:0}
+.cell .val{color:var(--secondary)}
+.disclosure{width:8px;height:13px;color:rgba(60,60,67,.3);flex:none}
+@media (prefers-color-scheme: dark){.disclosure{color:rgba(235,235,245,.3)}}
+.cell.action{color:var(--accent);cursor:pointer}
+.cell.action.red{color:var(--red)}
+.cell.action.disabled{color:var(--secondary);opacity:.6;pointer-events:none}
+.headline{font-weight:600}
+.sub{font-size:15px;color:var(--secondary)}
+.cap{font-size:12px;color:var(--secondary)}
+.item-lines{display:flex;flex-direction:column;gap:6px;padding:4px 0}
+.seg{display:flex;background:var(--fill);border-radius:9px;padding:2px;width:100%;position:relative}
+.seg button{flex:1;font-size:13px;font-weight:500;padding:6px 4px;border-radius:7px;position:relative;z-index:1;white-space:nowrap}
+.seg button.on{background:var(--seg-on);box-shadow:0 3px 8px rgba(0,0,0,.12),0 3px 1px rgba(0,0,0,.04);font-weight:600}
+.cell.segcell{padding:8px 16px}
+.cell input.text{border:0;outline:0;background:transparent;flex:1;font-size:17px;padding:0;min-width:0}
+.cell input.text::placeholder{color:rgba(60,60,67,.3)}
+@media (prefers-color-scheme: dark){.cell input.text::placeholder{color:rgba(235,235,245,.3)}}
+.menu-trigger{position:relative}
+select.native{position:absolute;inset:0;opacity:0;width:100%;font-size:16px;cursor:pointer}
+.cell .picked{color:var(--secondary);display:flex;align-items:center;gap:4px}
+.cell .picked svg{width:10px;height:14px}
+/* wheel */
+.wheelbox{position:relative;height:140px;margin:0 -16px;overflow:hidden}
+.wheel{height:140px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;padding:54px 0;
+  -webkit-mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent)}
+.wheel::-webkit-scrollbar{display:none}
+.wheel div{height:32px;line-height:32px;text-align:center;scroll-snap-align:center;font-size:21px;color:var(--secondary);transition:color .1s}
+.wheel div.sel{color:var(--label)}
+.wheelbox .hl{position:absolute;left:10px;right:10px;top:54px;height:32px;border-radius:8px;background:var(--fill);pointer-events:none}
+/* swipe rows */
+.rowwrap{position:relative;overflow:hidden}
+.rowwrap .acts{position:absolute;top:0;bottom:0;display:flex}
+.rowwrap .acts.lead{left:0}.rowwrap .acts.trail{right:0}
+.rowwrap .acts button{color:#fff;font-size:15px;min-width:74px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.rowwrap .acts button svg{width:22px;height:22px}
+.a-green{background:var(--green)}.a-orange{background:var(--orange)}.a-red{background:var(--red)}
+.rowwrap .cell{transition:transform .25s ease;touch-action:pan-y;user-select:none;-webkit-user-select:none;z-index:1}
+.rowwrap .cell.drag{transition:none}
+/* overlays */
+.overlay{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.3);animation:fade .15s}
+@keyframes fade{from{opacity:0}}
+.alert{width:270px;border-radius:14px;background:rgba(242,242,242,.92);-webkit-backdrop-filter:blur(30px);backdrop-filter:blur(30px);text-align:center;overflow:hidden}
+@media (prefers-color-scheme: dark){.alert{background:rgba(37,37,37,.92)}}
+.alert .t{font-weight:600;padding:19px 16px 2px}
+.alert .m{font-size:13px;padding:0 16px 19px}
+.alert .bs{display:flex;border-top:.5px solid var(--sep)}
+.alert .bs button{flex:1;height:44px;color:var(--accent)}
+.alert .bs button+button{border-left:.5px solid var(--sep)}
+.alert .bs .destr{color:var(--red)}
+.alert .bs .cancel{font-weight:600}
+.popmenu{position:fixed;z-index:51;min-width:240px;border-radius:13px;overflow:hidden;background:rgba(249,249,249,.94);
+  -webkit-backdrop-filter:blur(30px);backdrop-filter:blur(30px);box-shadow:0 10px 40px rgba(0,0,0,.2);animation:fade .12s}
+@media (prefers-color-scheme: dark){.popmenu{background:rgba(37,37,37,.94)}}
+.popmenu .mh{font-size:13px;color:var(--secondary);padding:10px 16px 6px}
+.popmenu button{display:flex;width:100%;align-items:center;gap:10px;padding:11px 16px;text-align:left;border-top:.5px solid var(--sep)}
+.popmenu button .ck{width:16px;color:var(--label)}
+.popmenu .gap{height:8px;background:rgba(0,0,0,.08)}
+.progress{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--secondary);font-size:15px;padding:8px 0}
+.spinner{width:20px;height:20px;border:2.5px solid var(--fill);border-top-color:var(--secondary);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{color:var(--red);font-size:13px}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);background:rgba(0,0,0,.8);
+  color:#fff;padding:10px 16px;border-radius:20px;font-size:15px;z-index:60;animation:fade .2s}
+/* login */
+.login{max-width:420px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 60px) 0 40px}
+.login .logo{width:96px;height:96px;border-radius:22px;display:block;margin:0 auto 16px}
+.login h1{text-align:center;font-size:34px;margin:0 0 6px}
+.login p{text-align:center;margin:0 24px 28px}
+.login .note{font-size:13px;margin:12px 32px;text-align:center;color:var(--secondary)}
+@media (min-width:700px){ .screen{max-width:700px;margin:0 auto} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+const SB_URL = "https://ckqrdytcooudiqatnuim.supabase.co";
+const SB_KEY = "sb_publishable_DqcvrZVTW3wz_7rVTaCKMQ_pLQ-Bg-n";
+
+/* ---------- enums (mirror models.swift) ---------- */
+const POSITIONS = ["Oben", "Mitte", "Unten"];
+const UNITS = ["g", "Portion", "Laib", "halber Laib"];
+const CATEGORIES = ["Zutat", "Gericht"];
+const FREEZERS = ["TK 1", "TK 2"];
+const SORTS = ["Name A–Z", "Datum neu → alt", "Datum alt → neu", "Menge aufsteigend", "Menge absteigend"];
+const step = (unit) => unit === "g" ? 50 : 1;
+const range = (a, b, s = 1) => { const r = []; for (let i = a; i <= b; i += s) r.push(i); return r; };
+
+/* ---------- helpers ---------- */
+const app = document.getElementById("app");
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const h = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+const fmtDate = (d) => new Date(d).toLocaleDateString("de-DE", { day: "numeric", month: "short", year: "numeric" });
+const fmtDateLong = (d) => new Date(d).toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const ICON = {
+  chevL: '<svg class="chev" viewBox="0 0 13 21"><path d="M11 1.5 2 10.5l9 9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  chevR: '<svg class="disclosure" viewBox="0 0 8 13"><path d="m1.5 1.5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  updown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M9 16.5V7.5M6.8 9.7 9 7.5l2.2 2.2M15 7.5v9M12.8 14.3l2.2 2.2 2.2-2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  search: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="5.2"/><path d="m11 11 3.5 3.5" stroke-linecap="round"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v9M7.5 12h9" stroke-linecap="round"/></svg>',
+  minus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M7.5 12h9" stroke-linecap="round"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5l1 13h9l1-13M10 10v6.5M14 10v6.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  updownSmall: '<svg viewBox="0 0 10 14"><path d="M2 5l3-3 3 3M2 9l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+function toast(msg) { const t = h(`<div class="toast">${esc(msg)}</div>`); document.body.appendChild(t); setTimeout(() => t.remove(), 2400); }
+
+/* iOS-style alert. buttons: [{label, role:'cancel'|'destructive', onClick}] */
+function alertBox(title, message, buttons) {
+  const o = h(`<div class="overlay"><div class="alert"><div class="t">${esc(title)}</div><div class="m">${esc(message)}</div><div class="bs"></div></div></div>`);
+  const bs = o.querySelector(".bs");
+  buttons.forEach(b => {
+    const el = h(`<button class="${b.role === "destructive" ? "destr" : b.role === "cancel" ? "cancel" : ""}">${esc(b.label)}</button>`);
+    el.onclick = () => { o.remove(); b.onClick && b.onClick(); };
+    bs.appendChild(el);
+  });
+  document.body.appendChild(o);
+}
+
+/* iOS-style pull-down menu anchored to an element */
+function popMenu(anchor, build) {
+  const o = h(`<div class="overlay" style="background:transparent"></div>`);
+  const m = h(`<div class="popmenu"></div>`);
+  build(m, () => o.remove());
+  o.appendChild(m);
+  o.addEventListener("click", e => { if (e.target === o) o.remove(); });
+  document.body.appendChild(o);
+  const r = anchor.getBoundingClientRect();
+  m.style.top = (r.bottom + 6) + "px";
+  m.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+}
+
+/* ---------- Supabase / store (mirrors InventoryStore.swift) ---------- */
+const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+const store = {
+  items: [], isLoading: false, errorMessage: null,
+  async loadItems() {
+    this.isLoading = true; this.errorMessage = null; rerender();
+    const { data, error } = await sb.from("stored_items").select("*").order("stored_at", { ascending: false });
+    if (error) this.errorMessage = error.message; else this.items = (data || []).filter(i => i.name !== "__keepalive__");
+    this.isLoading = false; rerender();
+  },
+  async run(promise) {
+    const { error } = await promise;
+    if (error) { this.errorMessage = error.message; toast(error.message); }
+    await this.loadItems();
+    return !error;
+  },
+  addItem(it) {
+    return this.run(sb.from("stored_items").insert({ id: crypto.randomUUID(), stored_at: new Date().toISOString(), ...it }));
+  },
+  updateQuantity(item, q) {
+    return q <= 0 ? this.deleteItem(item) : this.run(sb.from("stored_items").update({ quantity: q }).eq("id", item.id));
+  },
+  update(item, fields) { return this.run(sb.from("stored_items").update(fields).eq("id", item.id)); },
+  deleteItem(item) { return this.run(sb.from("stored_items").delete().eq("id", item.id)); },
+  removeAmount(item, amount) {
+    const cur = this.items.find(i => i.id === item.id); if (!cur) return;
+    return amount >= cur.quantity ? this.deleteItem(cur) : this.updateQuantity(cur, cur.quantity - amount);
+  },
+  itemsFor(freezer, pos) { return this.items.filter(i => i.freezer_name === freezer && i.position === pos); },
+  itemsForFreezer(f) { return this.items.filter(i => i.freezer_name === f); },
+  find(id) { return this.items.find(i => i.id === id); },
+};
+
+/* ---------- navigation stack ---------- */
+let stack = [];
+let goingBack = false;
+function push(view) {
+  stack.push(view);
+  history.pushState({ depth: stack.length }, "");
+  show();
+}
+function dismiss() { if (stack.length > 1) history.back(); }
+window.addEventListener("popstate", () => {
+  const depth = (history.state && history.state.depth) || 1;
+  if (depth < stack.length) { stack = stack.slice(0, Math.max(1, depth)); goingBack = true; show(); }
+});
+function resetTo(view) { stack = [view]; history.replaceState({ depth: 1 }, ""); show(); }
+
+function show() {
+  const view = stack[stack.length - 1];
+  const prev = stack[stack.length - 2];
+  const scr = h(`<div class="screen ${goingBack ? "back" : ""}"></div>`);
+  goingBack = false;
+  const bar = h(`<div class="navbar"><div class="l"></div><div class="small">${esc(view.title())}</div><div class="r"></div></div>`);
+  if (prev) {
+    const b = h(`<button class="navbtn">${ICON.chevL}${esc(prev.title())}</button>`);
+    b.onclick = dismiss; bar.querySelector(".l").appendChild(b);
+  }
+  if (view.toolbar) view.toolbar(bar.querySelector(".r"));
+  scr.appendChild(bar);
+  scr.appendChild(h(`<div class="largetitle">${esc(view.title())}</div>`));
+  const body = document.createElement("div");
+  scr.appendChild(body);
+  view.render(body);
+  view._body = body; view._bar = bar;
+  app.replaceChildren(scr);
+  window.scrollTo(0, view._scroll || 0);
+  if (view.onAppear && !view._appeared) { view._appeared = true; view.onAppear(); }
+}
+function rerender() {
+  const view = stack[stack.length - 1]; if (!view || !view._body) return;
+  const active = document.activeElement, id = active && active.dataset && active.dataset.keep;
+  const sel = id && active.selectionStart;
+  view._bar.querySelector(".small").textContent = view.title();
+  document.querySelector(".largetitle").textContent = view.title();
+  view._body.replaceChildren(); view.render(view._body);
+  if (id) { const el = view._body.querySelector(`[data-keep="${id}"]`); if (el) { el.focus(); try { el.setSelectionRange(sel, sel); } catch (e) {} } }
+}
+window.addEventListener("scroll", () => {
+  const v = stack[stack.length - 1]; if (v) v._scroll = window.scrollY;
+  const bar = document.querySelector(".navbar"); if (bar) bar.classList.toggle("scrolled", window.scrollY > 38);
+}, { passive: true });
+
+/* ---------- UI building blocks ---------- */
+function section(title, cells) {
+  const s = h(`<div>${title ? `<div class="section-h">${esc(title)}</div>` : ""}<div class="section"><div class="group"></div></div></div>`);
+  const g = s.querySelector(".group");
+  cells.forEach(c => c && g.appendChild(c));
+  return s;
+}
+function segmented(options, value, onChange) {
+  const c = h(`<div class="cell segcell"><div class="seg"></div></div>`);
+  const seg = c.querySelector(".seg");
+  options.forEach(o => {
+    const b = h(`<button class="${o === value ? "on" : ""}">${esc(o)}</button>`);
+    b.onclick = () => { seg.querySelectorAll("button").forEach(x => x.classList.remove("on")); b.classList.add("on"); onChange(o); };
+    seg.appendChild(b);
+  });
+  return c;
+}
+function linkCell(label, onClick) {
+  const c = h(`<div class="cell link"><div class="grow">${esc(label)}</div>${ICON.chevR}</div>`);
+  c.onclick = onClick; return c;
+}
+function menuPickerCell(label, options, value, onChange) {
+  const c = h(`<div class="cell menu-trigger"><div class="grow">${esc(label)}</div><div class="picked"><span>${esc(value)}</span>${ICON.updownSmall}</div>
+    <select class="native">${options.map(o => `<option ${o === value ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></div>`);
+  c.querySelector("select").onchange = (e) => { c.querySelector(".picked span").textContent = e.target.value; onChange(e.target.value); };
+  return c;
+}
+function wheelCell(options, value, onChange) {
+  const c = h(`<div class="cell" style="padding:0 16px"><div class="grow"><div class="wheelbox"><div class="hl"></div><div class="wheel"></div></div></div></div>`);
+  const w = c.querySelector(".wheel");
+  options.forEach((o, i) => { const d = document.createElement("div"); d.textContent = o; d.onclick = () => w.scrollTo({ top: i * 32, behavior: "smooth" }); w.appendChild(d); });
+  let idx = Math.max(0, options.indexOf(value)), t;
+  const mark = () => [...w.children].forEach((d, i) => d.classList.toggle("sel", i === idx));
+  mark();
+  requestAnimationFrame(() => { w.scrollTop = idx * 32; });
+  w.addEventListener("scroll", () => {
+    const i = Math.min(options.length - 1, Math.max(0, Math.round(w.scrollTop / 32)));
+    if (i !== idx) { idx = i; mark(); }
+    clearTimeout(t); t = setTimeout(() => onChange(options[idx]), 90);
+  }, { passive: true });
+  return c;
+}
+function progressCell(label) { return h(`<div class="cell"><div class="grow progress"><div class="spinner"></div>${esc(label)}</div></div>`); }
+
+/* Swipeable list row: lead/trail = [{label, icon, cls, onClick}] */
+let openRow = null;
+function swipeRow(content, { lead = [], trail = [], onTap }) {
+  const wrap = h(`<div class="rowwrap"><div class="acts lead"></div><div class="acts trail"></div></div>`);
+  const mk = (box, arr) => arr.forEach(a => {
+    const b = h(`<button class="${a.cls}">${a.icon || ""}<span>${esc(a.label)}</span></button>`);
+    b.onclick = (e) => { e.stopPropagation(); close(); a.onClick(); };
+    box.appendChild(b);
+  });
+  mk(wrap.querySelector(".lead"), lead); mk(wrap.querySelector(".trail"), trail);
+  wrap.appendChild(content);
+  const leadW = lead.length * 74, trailW = trail.length * 74;
+  let x0 = 0, y0 = 0, dx = 0, base = 0, dragging = false, decided = false, horiz = false;
+  const set = (x) => { content.style.transform = x ? `translateX(${x}px)` : ""; };
+  function close() { base = 0; set(0); if (openRow === close) openRow = null; }
+  content.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (openRow && openRow !== close) openRow();
+    x0 = e.clientX; y0 = e.clientY; dx = 0; dragging = true; decided = false; horiz = false;
+    content.classList.add("press");
+  });
+  content.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if (!decided && (Math.abs(mx) > 8 || Math.abs(my) > 8)) {
+      decided = true; horiz = Math.abs(mx) > Math.abs(my); content.classList.remove("press");
+      if (horiz) { content.classList.add("drag"); try { content.setPointerCapture(e.pointerId); } catch (_) {} }
+    }
+    if (!horiz) return;
+    dx = mx;
+    let x = base + dx;
+    x = Math.min(x, leadW ? leadW + 30 : 0); x = Math.max(x, trailW ? -trailW - 30 : 0);
+    set(x);
+  });
+  const end = () => {
+    if (!dragging) return; dragging = false; content.classList.remove("drag"); content.classList.remove("press");
+    if (!horiz) { if (!decided) { if (base) close(); else onTap && onTap(); } return; }
+    const x = base + dx;
+    if (x > leadW / 2 && leadW) { base = leadW; set(base); openRow = close; }
+    else if (x < -trailW / 2 && trailW) { base = -trailW; set(base); openRow = close; }
+    else close();
+  };
+  content.addEventListener("pointerup", end);
+  content.addEventListener("pointercancel", () => { dragging = false; content.classList.remove("drag", "press"); if (horiz) close(); });
+  return wrap;
+}
+const decAction = (item) => ({ label: "-", icon: ICON.minus, cls: "a-orange", onClick: () => store.updateQuantity(item, Math.max(0, item.quantity - step(item.unit))) });
+const incAction = (item) => ({ label: "+", icon: ICON.plus, cls: "a-green", onClick: () => store.updateQuantity(item, item.quantity + step(item.unit)) });
+const delAction = (item) => ({ label: "Löschen", icon: ICON.trash, cls: "a-red", onClick: () => store.deleteItem(item) });
+
+/* ---------- Views (one per SwiftUI view) ---------- */
+
+// ContentView
+function ContentView() {
+  return {
+    title: () => "Start",
+    toolbar(r) { const b = h(`<button class="navbtn">Abmelden</button>`); b.onclick = signOutAsk; r.appendChild(b); },
+    render(el) {
+      const c = h(`<div class="center"><div class="lt">TK Manager</div><div class="secondary">Wähle eine Tiefkühltruhe</div></div>`);
+      const b1 = h(`<button class="btn">Gesamtübersicht</button>`); b1.onclick = () => push(InventoryOverviewView("Alle"));
+      c.appendChild(b1);
+      FREEZERS.forEach(f => { const b = h(`<button class="btn prominent">${esc(f)}</button>`); b.onclick = () => push(FreezerMenuView(f)); c.appendChild(b); });
+      if (store.isLoading) c.appendChild(h(`<div class="progress"><div class="spinner"></div>Lade Daten...</div>`));
+      if (store.errorMessage) c.appendChild(h(`<div class="err">${esc(store.errorMessage)}</div>`));
+      el.appendChild(c);
+    },
+  };
+}
+
+// FreezerMenuView
+function FreezerMenuView(freezer) {
+  return {
+    title: () => "Menü",
+    render(el) {
+      const c = h(`<div class="center"><div class="lt">${esc(freezer)}</div></div>`);
+      const a = h(`<button class="btn">Ansehen</button>`); a.onclick = () => push(InventoryOverviewView(FREEZERS.includes(freezer) ? freezer : "Alle"));
+      const b = h(`<button class="btn prominent">Einlagern</button>`); b.onclick = () => push(PositionSelectionView(freezer, "store"));
+      const d = h(`<button class="btn">Entnehmen</button>`); d.onclick = () => push(PositionSelectionView(freezer, "remove"));
+      c.append(a, b, d); el.appendChild(c);
+    },
+  };
+}
+
+// PositionSelectionView
+function PositionSelectionView(freezer, mode) {
+  return {
+    title: () => freezer,
+    render(el) {
+      el.appendChild(section(null, POSITIONS.map(p => linkCell(p, () => push(mode === "store" ? AddItemView(freezer, p) : RemoveItemView(freezer, p))))));
+    },
+  };
+}
+
+// AddItemView
+function AddItemView(freezer, position) {
+  const s = { name: "", unit: "Portion", category: "Zutat", quantity: 1 };
+  const opts = () => s.unit === "g" ? range(50, 3000, 50) : range(1, 10);
+  let saving = false;
+  return {
+    title: () => position,
+    render(el) {
+      const nameCell = h(`<div class="cell"><input class="text" data-keep="name" placeholder="Name" autocomplete="off" value="${esc(s.name)}"></div>`);
+      const save = h(`<div class="cell action ${s.name.trim() ? "" : "disabled"}">Einlagern</div>`);
+      nameCell.querySelector("input").oninput = (e) => { s.name = e.target.value; save.classList.toggle("disabled", !s.name.trim()); };
+      el.appendChild(section("Neues Item", [
+        nameCell,
+        menuPickerCell("Einheit", UNITS, s.unit, v => { s.unit = v; s.quantity = opts()[0]; rerender(); }),
+        menuPickerCell("Kategorie", CATEGORIES, s.category, v => { s.category = v; }),
+      ]));
+      const selVal = h(`<div class="val">${s.quantity} ${esc(s.unit)}</div>`);
+      el.appendChild(section("Menge", [
+        (() => { const c = h(`<div class="cell"><div class="grow">Ausgewählt</div></div>`); c.appendChild(selVal); return c; })(),
+        wheelCell(opts(), s.quantity, v => { s.quantity = v; selVal.textContent = `${v} ${s.unit}`; }),
+      ]));
+      save.onclick = async () => {
+        if (saving || !s.name.trim()) return; saving = true;
+        const ok = await store.addItem({ name: s.name, quantity: s.quantity, unit: s.unit, category: s.category, freezer_name: freezer, position });
+        saving = false; if (ok) dismiss();
+      };
+      el.appendChild(section(null, [save]));
+    },
+  };
+}
+
+// RemoveItemView
+function RemoveItemView(freezer, position) {
+  return {
+    title: () => position,
+    render(el) {
+      const items = store.itemsFor(freezer, position);
+      if (!items.length) { el.appendChild(section(null, [h(`<div class="cell secondary">Keine Items zum Entnehmen</div>`)])); return; }
+      el.appendChild(section(null, items.map(item => {
+        const c = h(`<div class="cell link"><div class="grow item-lines" style="gap:4px">
+          <div class="headline">${esc(item.name)}</div>
+          <div class="secondary">Bestand: ${item.quantity} ${esc(item.unit)}</div>
+          <div class="cap">${esc(item.category)}</div></div>${ICON.chevR}</div>`);
+        return swipeRow(c, { trail: [delAction(item), decAction(item)], onTap: () => push(RemoveAmountView(item.id)) });
+      })));
+    },
+  };
+}
+
+// RemoveAmountView
+function RemoveAmountView(id) {
+  let amount = null, busy = false;
+  return {
+    title: () => "Entnehmen",
+    render(el) {
+      const item = store.find(id);
+      if (!item) { el.appendChild(section(null, [h(`<div class="cell secondary">Eintrag nicht mehr vorhanden</div>`)])); return; }
+      const opts = item.unit === "g" ? range(50, Math.min(item.quantity, 3000), 50) : range(1, Math.min(item.quantity, 10));
+      if (amount === null || !opts.includes(amount)) amount = opts[0] ?? 1;
+      el.appendChild(section("Item", [
+        h(`<div class="cell headline">${esc(item.name)}</div>`),
+        h(`<div class="cell">Kategorie: ${esc(item.category)}</div>`),
+        h(`<div class="cell secondary">Aktueller Bestand: ${item.quantity} ${esc(item.unit)}</div>`),
+      ]));
+      const selVal = h(`<div class="val">${amount} ${esc(item.unit)}</div>`);
+      const selCell = h(`<div class="cell"><div class="grow">Ausgewählt</div></div>`); selCell.appendChild(selVal);
+      el.appendChild(section("Entnahmemenge", [selCell, wheelCell(opts, amount, v => { amount = v; selVal.textContent = `${v} ${item.unit}`; })]));
+      const take = h(`<div class="cell action red">Entnehmen</div>`);
+      take.onclick = async () => { if (busy) return; busy = true; await store.removeAmount(item, amount); busy = false; dismiss(); };
+      el.appendChild(section(null, [take]));
+      const del = h(`<div class="cell action red">Gesamtes Item löschen</div>`);
+      del.onclick = () => confirmDelete(item);
+      el.appendChild(section(null, [del]));
+    },
+  };
+}
+
+function confirmDelete(item) {
+  alertBox("Eintrag löschen?", "Dieser Vorgang kann nicht rückgängig gemacht werden.", [
+    { label: "Abbrechen", role: "cancel" },
+    { label: "Löschen", role: "destructive", onClick: async () => { await store.deleteItem(item); dismiss(); } },
+  ]);
+}
+
+// ItemDetailView
+function ItemDetailView(id) {
+  let s = null, busy = false;
+  return {
+    title: () => "Bearbeiten",
+    render(el) {
+      const item = store.find(id);
+      if (!item) { el.appendChild(section(null, [h(`<div class="cell secondary">Eintrag nicht mehr vorhanden</div>`)])); return; }
+      if (!s) s = { quantity: item.quantity, category: item.category, position: item.position, freezer: item.freezer_name };
+      const changed = () => s.quantity !== item.quantity || s.category !== item.category || s.position !== item.position || s.freezer !== item.freezer_name;
+      const save = h(`<div class="cell action ${changed() ? "" : "disabled"}">Speichern</div>`);
+      const upd = () => save.classList.toggle("disabled", !changed());
+      el.appendChild(section("Item", [
+        h(`<div class="cell headline">${esc(item.name)}</div>`),
+        segmented(CATEGORIES, s.category, v => { s.category = v; upd(); }),
+      ]));
+      const freezers = [...new Set(store.items.map(i => i.freezer_name))].sort();
+      el.appendChild(section("Lagerort", [
+        segmented(freezers, s.freezer, v => { s.freezer = v; upd(); }),
+        segmented(POSITIONS, s.position, v => { s.position = v; upd(); }),
+      ]));
+      const opts = item.unit === "g" ? range(50, 3000, 50) : range(0, 50);
+      if (!opts.includes(s.quantity)) { opts.push(s.quantity); opts.sort((a, b) => a - b); }
+      const selVal = h(`<div class="val">${s.quantity} ${esc(item.unit)}</div>`);
+      const selCell = h(`<div class="cell"><div class="grow">Ausgewählt</div></div>`); selCell.appendChild(selVal);
+      el.appendChild(section("Menge anpassen", [
+        h(`<div class="cell secondary">Aktueller Bestand: ${item.quantity} ${esc(item.unit)}</div>`),
+        selCell,
+        wheelCell(opts, s.quantity, v => { s.quantity = v; selVal.textContent = `${v} ${item.unit}`; upd(); }),
+      ]));
+      save.onclick = async () => {
+        if (busy || !changed()) return; busy = true;
+        let ok;
+        if (s.quantity <= 0) ok = await store.deleteItem(item);
+        else {
+          const f = {};
+          if (s.quantity !== item.quantity) f.quantity = s.quantity;
+          if (s.category !== item.category) f.category = s.category;
+          if (s.position !== item.position) f.position = s.position;
+          if (s.freezer !== item.freezer_name) f.freezer_name = s.freezer;
+          ok = await store.update(item, f);
+        }
+        busy = false; if (ok) dismiss();
+      };
+      const del = h(`<div class="cell action red">Löschen</div>`);
+      del.onclick = () => confirmDelete(item);
+      el.appendChild(section(null, [save, del]));
+    },
+  };
+}
+
+// InventoryOverviewView
+function InventoryOverviewView(initialTK) {
+  const s = { tk: initialTK, filter: "Alle", drawer: "Alle", search: "", sort: "Name A–Z" };
+  function filtered() {
+    let items = s.tk === "Alle" ? store.items : store.itemsForFreezer(s.tk);
+    if (s.filter === "Zutaten") items = items.filter(i => i.category === "Zutat");
+    if (s.filter === "Gerichte") items = items.filter(i => i.category === "Gericht");
+    const q = s.search.trim().toLowerCase();
+    if (q) items = items.filter(i => [i.name, i.freezer_name, i.position, i.unit, i.category, String(i.quantity), fmtDate(i.stored_at), fmtDateLong(i.stored_at)]
+      .some(x => String(x || "").toLowerCase().includes(q)));
+    if (s.drawer !== "Alle") items = items.filter(i => i.position === s.drawer);
+    const byName = (a, b) => a.name.localeCompare(b.name, "de", { sensitivity: "base" });
+    const sorters = {
+      "Name A–Z": byName,
+      "Datum neu → alt": (a, b) => new Date(b.stored_at) - new Date(a.stored_at),
+      "Datum alt → neu": (a, b) => new Date(a.stored_at) - new Date(b.stored_at),
+      "Menge aufsteigend": (a, b) => a.quantity - b.quantity,
+      "Menge absteigend": (a, b) => b.quantity - a.quantity,
+    };
+    return [...items].sort(sorters[s.sort]);
+  }
+  const view = {
+    title: () => s.tk === "Alle" ? "Gesamtübersicht" : `${s.tk} – Bestand`,
+    onAppear: () => store.loadItems(),
+    toolbar(r) {
+      const b = h(`<button class="navbtn" aria-label="Sortieren">${ICON.updown}</button>`);
+      b.onclick = () => popMenu(b, (m, close) => {
+        m.appendChild(h(`<div class="mh">Sortierung</div>`));
+        SORTS.forEach(o => {
+          const x = h(`<button><span class="ck">${o === s.sort ? "✓" : ""}</span>${esc(o)}</button>`);
+          x.onclick = () => { s.sort = o; close(); rerender(); }; m.appendChild(x);
+        });
+        m.appendChild(h(`<div class="gap"></div>`));
+        const rl = h(`<button style="border-top:0"><span class="ck"></span>Neu laden</button>`);
+        rl.onclick = () => { close(); store.loadItems(); }; m.appendChild(rl);
+      });
+      r.appendChild(b);
+    },
+    render(el) {
+      const sr = h(`<div class="search ${s.search ? "has" : ""}">${ICON.search}<input type="search" data-keep="search" placeholder="Suche in allen Eigenschaften" value="${esc(s.search)}" autocomplete="off"><button class="clear">✕</button></div>`);
+      const inp = sr.querySelector("input");
+      inp.oninput = () => { s.search = inp.value; rerender(); };
+      sr.querySelector(".clear").onclick = () => { s.search = ""; rerender(); };
+      el.appendChild(sr);
+      el.appendChild(section(null, [
+        segmented(["Alle", ...FREEZERS], s.tk, v => { s.tk = v; rerender(); }),
+        segmented(["Alle", "Zutaten", "Gerichte"], s.filter, v => { s.filter = v; rerender(); }),
+        segmented(["Alle", ...POSITIONS], s.drawer, v => { s.drawer = v; rerender(); }),
+      ]));
+      if (store.isLoading && !store.items.length) el.appendChild(section(null, [progressCell("Lade Bestand...")]));
+      const items = filtered();
+      POSITIONS.forEach(pos => {
+        const inSec = items.filter(i => i.position === pos);
+        el.appendChild(section(pos, inSec.length ? inSec.map(item => {
+          const c = h(`<div class="cell link"><div class="grow item-lines">
+            <div class="headline">${esc(item.name)}</div>
+            <div>Menge: ${item.quantity} ${esc(item.unit)}</div>
+            <div class="sub">Kategorie: ${esc(item.category)}</div>
+            <div class="cap">Eingelagert: ${esc(fmtDate(item.stored_at))}</div></div>${ICON.chevR}</div>`);
+          return swipeRow(c, { lead: [incAction(item)], trail: [decAction(item), delAction(item)], onTap: () => push(ItemDetailView(item.id)) });
+        }) : [h(`<div class="cell secondary">Keine Einträge</div>`)]));
+      });
+      if (store.errorMessage) el.appendChild(section("Fehler", [h(`<div class="cell err">${esc(store.errorMessage)}</div>`)]));
+    },
+  };
+  return view;
+}
+
+/* ---------- Login ---------- */
+function LoginView(message) {
+  const scr = h(`<div class="screen login">
+    <img class="logo" src="apple-touch-icon.png" alt="">
+    <h1>TK Manager</h1>
+    <p class="secondary">Melde dich an, um den Bestand zu sehen.</p>
+    <form>
+      <div class="section"><div class="group">
+        <div class="cell"><input class="text" name="email" type="email" placeholder="E-Mail" autocomplete="username" required></div>
+        <div class="cell"><input class="text" name="password" type="password" placeholder="Passwort" autocomplete="current-password" required></div>
+      </div></div>
+      <div class="section"><div class="group"><button class="cell action" type="submit" style="width:100%;justify-content:center">Anmelden</button></div></div>
+    </form>
+    <div class="note err" id="loginErr">${esc(message || "")}</div>
+    <div class="note">Tipp: In Safari „Teilen → Zum Home-Bildschirm“ wählen, dann öffnet sich TK Manager wie eine App.</div>
+  </div>`);
+  scr.querySelector("form").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target, btn = f.querySelector("button");
+    btn.textContent = "Anmelden …"; btn.disabled = true;
+    const { error } = await sb.auth.signInWithPassword({ email: f.email.value.trim(), password: f.password.value });
+    btn.textContent = "Anmelden"; btn.disabled = false;
+    if (error) scr.querySelector("#loginErr").textContent = error.message === "Invalid login credentials" ? "E-Mail oder Passwort falsch." : error.message;
+  };
+  stack = []; app.replaceChildren(scr);
+}
+function signOutAsk() {
+  alertBox("Abmelden?", "Du musst dich danach neu anmelden.", [
+    { label: "Abbrechen", role: "cancel" },
+    { label: "Abmelden", role: "destructive", onClick: () => sb.auth.signOut() },
+  ]);
+}
+
+/* ---------- boot ---------- */
+let currentUser = null;
+async function startApp(session) {
+  if (!session) { currentUser = null; LoginView(); return; }
+  if (currentUser === session.user.id && stack.length) return;
+  currentUser = session.user.id;
+  const { data: ok, error } = await sb.rpc("is_app_user");
+  if (error || !ok) { await sb.auth.signOut(); LoginView("Dieses Konto ist noch nicht für den TK Manager freigeschaltet."); return; }
+  resetTo(ContentView());
+  // Deep links like the iOS app's tkfreezer://tk1 → #tk1 / #tk2
+  const hash = location.hash.replace("#", "").toLowerCase();
+  if (hash === "tk1" || hash === "tk2") push(FreezerMenuView(hash === "tk1" ? "TK 1" : "TK 2"));
+  store.loadItems();
+}
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "SIGNED_OUT") setTimeout(() => startApp(session), 0);
+});
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && currentUser) store.loadItems(); });
+</script>
+</body>
+</html>
