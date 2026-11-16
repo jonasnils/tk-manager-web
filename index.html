@@ -200,7 +200,17 @@ function popMenu(anchor, build) {
 }
 
 /* ---------- Supabase / store (mirrors InventoryStore.swift) ---------- */
-const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+/* "Angemeldet bleiben": on → session in localStorage (survives closing the app), off → sessionStorage. */
+const REMEMBER_KEY = "tk_remember";
+const remember = () => { try { return localStorage.getItem(REMEMBER_KEY) !== "0"; } catch (e) { return true; } };
+const authStorage = {
+  getItem(k) { try { return localStorage.getItem(k) ?? sessionStorage.getItem(k); } catch (e) { return null; } },
+  setItem(k, v) { try { (remember() ? localStorage : sessionStorage).setItem(k, v); } catch (e) {} },
+  removeItem(k) { try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch (e) {} },
+};
+const sb = window.supabase.createClient(SB_URL, SB_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storage: authStorage },
+});
 const store = {
   items: [], isLoading: false, errorMessage: null,
   async loadItems() {
@@ -633,6 +643,10 @@ function LoginView(message) {
         <div class="cell"><input class="text" name="email" type="email" placeholder="E-Mail" autocomplete="username" required></div>
         <div class="cell"><input class="text" name="password" type="password" placeholder="Passwort" autocomplete="current-password" required></div>
       </div></div>
+      <div class="section"><div class="group">
+        <label class="cell" style="cursor:pointer"><div class="grow">Angemeldet bleiben</div>
+          <input type="checkbox" name="remember" checked style="width:22px;height:22px;accent-color:var(--accent)"></label>
+      </div></div>
       <div class="section"><div class="group"><button class="cell action" type="submit" style="width:100%;justify-content:center">Anmelden</button></div></div>
     </form>
     <div class="note err" id="loginErr">${esc(message || "")}</div>
@@ -642,6 +656,7 @@ function LoginView(message) {
     e.preventDefault();
     const f = e.target, btn = f.querySelector("button");
     btn.textContent = "Anmelden …"; btn.disabled = true;
+    try { localStorage.setItem(REMEMBER_KEY, f.remember.checked ? "1" : "0"); } catch (_) {}
     const { error } = await sb.auth.signInWithPassword({ email: f.email.value.trim(), password: f.password.value });
     btn.textContent = "Anmelden"; btn.disabled = false;
     if (error) scr.querySelector("#loginErr").textContent = error.message === "Invalid login credentials" ? "E-Mail oder Passwort falsch." : error.message;
@@ -661,8 +676,10 @@ async function startApp(session) {
   if (!session) { currentUser = null; LoginView(); return; }
   if (currentUser === session.user.id && stack.length) return;
   currentUser = session.user.id;
+  // Only log out when the account is definitely not on the household list.
+  // A failed check (e.g. no network right after opening) must not throw away the saved login.
   const { data: ok, error } = await sb.rpc("is_app_user");
-  if (error || !ok) { await sb.auth.signOut(); LoginView("Dieses Konto ist noch nicht für den TK Manager freigeschaltet."); return; }
+  if (!error && ok === false) { await sb.auth.signOut(); LoginView("Dieses Konto ist noch nicht für den TK Manager freigeschaltet."); return; }
   resetTo(ContentView());
   // Deep links like the iOS app's tkfreezer://tk1 → #tk1 / #tk2
   const hash = location.hash.replace("#", "").toLowerCase();
