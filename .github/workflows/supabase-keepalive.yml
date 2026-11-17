@@ -1,0 +1,47 @@
+# Keeps the free-plan Supabase project awake, so it is never paused after 7 days without activity.
+# Runs on GitHub's servers once a day – no Mac needed.
+# URL and publishable key are read from index.html, so they live in one place.
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: "17 5 * * *"   # daily, 05:17 UTC
+  workflow_dispatch:        # "Run workflow" button for a manual test
+
+permissions:
+  contents: write           # only used for the repo-activity stamp below
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ping Supabase (keepalive function)
+        run: |
+          URL=$(grep -oE 'https://[a-z0-9]+\.supabase\.co' index.html | head -1)
+          KEY=$(grep -oE 'sb_publishable_[A-Za-z0-9_-]+' index.html | head -1)
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then echo "Could not read URL/key from index.html"; exit 1; fi
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /tmp/out -w '%{http_code}' --max-time 30 -X POST "$URL/rest/v1/rpc/keepalive" \
+              -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -d '{}') || code=000
+            if [ "$code" = "200" ]; then echo "OK: keepalive ping at $(cat /tmp/out)"; exit 0; fi
+            echo "Attempt $attempt failed (HTTP $code), retrying in 60 s"; sleep 60
+          done
+          echo "Keep-alive ping failed"; exit 1
+
+      # GitHub switches off scheduled workflows in repos without activity for 60 days.
+      # If the last commit is older than 45 days, commit a small date stamp to keep this job alive.
+      - name: Keep the schedule from being disabled
+        run: |
+          last=$(git log -1 --format=%ct)
+          age_days=$(( ( $(date +%s) - last ) / 86400 ))
+          echo "Last commit $age_days days ago"
+          if [ "$age_days" -ge 45 ]; then
+            date -u +%Y-%m-%d > .github/keepalive-stamp
+            git config user.name "github-actions[bot]"
+            git config user.email "41898296+github-actions[bot]@users.noreply.github.com"
+            git add .github/keepalive-stamp
+            git commit -m "Keep-alive stamp $(date -u +%Y-%m-%d)"
+            git push
+          fi
